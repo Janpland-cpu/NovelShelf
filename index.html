@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="theme-color" content="#f4efe6" />
+  <meta name="description" content="个人网文、轻小说书架与阅读站" />
+  <title>纸页书架</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./assets/icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="./styles.css" />
+  <script src="./config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script defer src="./app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <button id="homeBtn" class="brand button-reset" aria-label="返回书架">
+      <span class="brand-mark">页</span>
+      <span id="siteTitle">纸页书架</span>
+    </button>
+    <nav class="top-actions" aria-label="全局操作">
+      <button id="themeBtn" class="icon-btn" type="button" title="切换明暗主题">◐</button>
+      <button id="authBtn" class="text-btn" type="button">登录</button>
+    </nav>
+  </header>
+
+  <main id="app" class="app-shell" aria-live="polite"></main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <dialog id="loginDialog" class="modal">
+    <form id="loginForm" method="dialog" class="modal-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">作者后台</p>
+          <h2>登录</h2>
+        </div>
+        <button class="icon-btn" value="cancel" aria-label="关闭">×</button>
+      </div>
+      <label class="field">
+        <span>邮箱</span>
+        <input id="loginEmail" name="email" type="email" autocomplete="username" required />
+      </label>
+      <label class="field">
+        <span>密码</span>
+        <input id="loginPassword" name="password" type="password" autocomplete="current-password" required />
+      </label>
+      <p class="muted small">本站不提供注册入口。作者账号请在 Supabase 后台创建。</p>
+      <div class="modal-actions">
+        <button class="secondary-btn" value="cancel" type="button" data-close-dialog>取消</button>
+        <button class="primary-btn" type="submit">登录</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="novelDialog" class="modal">
+    <form id="novelForm" method="dialog" class="modal-card wide">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">作品信息</p>
+          <h2 id="novelDialogTitle">新建作品</h2>
+        </div>
+        <button class="icon-btn" value="cancel" aria-label="关闭">×</button>
+      </div>
+      <input id="novelId" type="hidden" />
+      <label class="field">
+        <span>书名</span>
+        <input id="novelTitle" type="text" maxlength="120" required />
+      </label>
+      <label class="field">
+        <span>简介</span>
+        <textarea id="novelDescription" rows="5" maxlength="3000"></textarea>
+      </label>
+      <label class="field">
+        <span>封面图片 URL（可留空）</span>
+        <input id="novelCover" type="url" inputmode="url" placeholder="https://..." />
+      </label>
+      <div class="field-grid">
+        <label class="field">
+          <span>状态</span>
+          <select id="novelStatus">
+            <option value="连载中">连载中</option>
+            <option value="完结">完结</option>
+            <option value="暂停">暂停</option>
+            <option value="草稿">草稿</option>
+          </select>
+        </label>
+        <label class="check-field">
+          <input id="novelPublic" type="checkbox" checked />
+          <span>公开展示</span>
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button class="secondary-btn" value="cancel" type="button" data-close-dialog>取消</button>
+        <button class="primary-btn" type="submit">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="chapterDialog" class="modal">
+    <form id="chapterForm" method="dialog" class="modal-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">章节</p>
+          <h2 id="chapterDialogTitle">新建章节</h2>
+        </div>
+        <button class="icon-btn" value="cancel" aria-label="关闭">×</button>
+      </div>
+      <input id="chapterId" type="hidden" />
+      <label class="field">
+        <span>章节标题</span>
+        <input id="chapterTitle" type="text" maxlength="160" required />
+      </label>
+      <label class="field">
+        <span>排序序号</span>
+        <input id="chapterOrder" type="number" min="0" step="1" value="1" required />
+      </label>
+      <label class="check-field">
+        <input id="chapterPublic" type="checkbox" checked />
+        <span>公开展示</span>
+      </label>
+      <div class="modal-actions">
+        <button class="secondary-btn" value="cancel" type="button" data-close-dialog>取消</button>
+        <button class="primary-btn" type="submit">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="readerSettingsDialog" class="modal">
+    <form method="dialog" class="modal-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">阅读设置</p>
+          <h2>排版</h2>
+        </div>
+        <button class="icon-btn" value="cancel" aria-label="关闭">×</button>
+      </div>
+      <label class="field">
+        <span>字号 <output id="fontSizeOutput">19px</output></span>
+        <input id="fontSizeRange" type="range" min="15" max="28" step="1" value="19" />
+      </label>
+      <label class="field">
+        <span>行距 <output id="lineHeightOutput">1.9</output></span>
+        <input id="lineHeightRange" type="range" min="1.4" max="2.4" step="0.1" value="1.9" />
+      </label>
+      <label class="field">
+        <span>阅读宽度</span>
+        <select id="readerWidthSelect">
+          <option value="680">窄</option>
+          <option value="760" selected>标准</option>
+          <option value="900">宽</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>字体</span>
+        <select id="readerFontSelect">
+          <option value="serif">衬线（小说）</option>
+          <option value="sans">无衬线</option>
+          <option value="system">系统字体</option>
+        </select>
+      </label>
+      <div class="modal-actions">
+        <button class="primary-btn" value="ok">完成</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="ttsDialog" class="modal">
+    <form method="dialog" class="modal-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">文字转语音</p>
+          <h2>朗读设置</h2>
+        </div>
+        <button class="icon-btn" value="cancel" aria-label="关闭">×</button>
+      </div>
+      <label class="field">
+        <span>语音</span>
+        <select id="ttsVoice"></select>
+      </label>
+      <label class="field">
+        <span>语速</span>
+        <select id="ttsRate">
+          <option value="0.8">0.8×</option>
+          <option value="1" selected>1.0×</option>
+          <option value="1.2">1.2×</option>
+          <option value="1.5">1.5×</option>
+        </select>
+      </label>
+      <p class="muted small">可用音色取决于你的手机、浏览器和系统。网页只调用本机 Speech Synthesis。</p>
+      <div class="modal-actions split">
+        <button id="ttsStopBtn" class="danger-ghost-btn" value="cancel" type="button">停止</button>
+        <button class="primary-btn" value="ok">完成</button>
+      </div>
+    </form>
+  </dialog>
+
+  <input id="imagePicker" type="file" accept="image/*" hidden />
+</body>
+</html>
