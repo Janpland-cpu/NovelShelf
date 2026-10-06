@@ -5,6 +5,8 @@
   const $ = (s, root = document) => root.querySelector(s);
   const app = $("#app");
   const toastEl = $("#toast");
+  const SEED_LIBRARY_URL = "./data/seed-library.json";
+  let seedLibraryCache = null;
 
   const state = {
     client: null,
@@ -18,6 +20,7 @@
     previewing: false,
     saveTimer: null,
     pendingImageTarget: null,
+    seedImporting: false,
     tts: {
       chunks: [],
       index: 0,
@@ -65,6 +68,28 @@
     } catch {
       return "";
     }
+  }
+
+  function defaultCoverMarkup(novel, large = false) {
+    const title = novel?.title || "未命名作品";
+    const cls = large ? "novel-cover-large default-cover" : "book-cover default-cover";
+    return `
+      <div class="${cls}" aria-label="${escapeAttr(title)}默认封面">
+        <span class="default-cover-kicker">NOVEL</span>
+        <strong>${escapeHtml(title)}</strong>
+        <span class="default-cover-site">${escapeHtml(cfg.siteTitle || "纸页书架")}</span>
+      </div>`;
+  }
+
+  function coverMarkup(novel, large = false) {
+    const cover = safeHttpUrl(novel?.cover_url || "");
+    const wrap = large ? "cover-wrap cover-wrap-large" : "cover-wrap";
+    const imageClass = large ? "novel-cover-large cover-image" : "book-cover cover-image";
+    return `
+      <div class="${wrap}">
+        ${defaultCoverMarkup(novel, large)}
+        ${cover ? `<img class="${imageClass}" src="${escapeAttr(cover)}" alt="${escapeAttr(novel.title || "作品")}封面" loading="lazy" onerror="this.remove()">` : ""}
+      </div>`;
   }
 
   function inlineMarkdown(text = "") {
@@ -150,8 +175,8 @@
     return Boolean(state.user && record && record.owner_id === state.user.id);
   }
 
-  function pageLoading() {
-    app.innerHTML = `<div class="loading skeleton">加载中…</div>`;
+  function pageLoading(message = "加载中…") {
+    app.innerHTML = `<div class="loading skeleton">${escapeHtml(message)}</div>`;
   }
 
   function setupTheme() {
@@ -347,6 +372,112 @@
     return `${base || "novel"}-${Date.now().toString(36)}`;
   }
 
+
+  async function loadSeedLibrary() {
+    if (seedLibraryCache) return seedLibraryCache;
+    const response = await fetch(SEED_LIBRARY_URL, { cache: "no-store" });
+    if (!response.ok) throw new Error(`无法读取内置书籍（HTTP ${response.status}）`);
+    const data = await response.json();
+    if (!data || !Array.isArray(data.books)) throw new Error("内置书籍数据格式不正确");
+    seedLibraryCache = data;
+    return data;
+  }
+
+  async function importSeedLibrary({ force = false, notify = true } = {}) {
+    if (!state.user || state.seedImporting) return { addedBooks: 0, addedChapters: 0 };
+    const seed = await loadSeedLibrary();
+    const checkedKey = `novel.seed.${seed.version || "1"}.${state.user.id}`;
+
+    if (!force && localStorage.getItem(checkedKey) === "1") {
+      return { addedBooks: 0, addedChapters: 0 };
+    }
+
+    state.seedImporting = true;
+    let addedBooks = 0;
+    let addedChapters = 0;
+
+    try {
+      for (const book of seed.books) {
+        const existingRes = await state.client
+          .from("novels")
+          .select("id,slug,owner_id")
+          .eq("slug", book.slug)
+          .limit(10);
+
+        if (existingRes.error) throw existingRes.error;
+        let novel = (existingRes.data || []).find(row => row.owner_id === state.user.id);
+
+        if (!novel) {
+          const createRes = await state.client
+            .from("novels")
+            .insert({
+              title: book.title,
+              slug: book.slug,
+              description: book.description || "",
+              cover_url: book.cover_url || null,
+              status: book.status || "完结",
+              is_public: book.is_public !== false
+            })
+            .select("id,slug,owner_id")
+            .single();
+
+          if (createRes.error) {
+            if (createRes.error.code === "23505") {
+              const retryRes = await state.client
+                .from("novels")
+                .select("id,slug,owner_id")
+                .eq("slug", book.slug)
+                .limit(10);
+              if (retryRes.error) throw retryRes.error;
+              novel = (retryRes.data || []).find(row => row.owner_id === state.user.id);
+              if (!novel) throw new Error(`无法导入《${book.title}》：固定标识已被其他账号占用`);
+            } else {
+              throw createRes.error;
+            }
+          } else {
+            novel = createRes.data;
+            addedBooks += 1;
+          }
+        }
+
+        const chaptersRes = await state.client
+          .from("chapters")
+          .select("title,order_index")
+          .eq("novel_id", novel.id);
+
+        if (chaptersRes.error) throw chaptersRes.error;
+        const existingKeys = new Set(
+          (chaptersRes.data || []).map(chapter => `${chapter.order_index}::${chapter.title}`)
+        );
+        const missing = (book.chapters || []).filter(
+          chapter => !existingKeys.has(`${chapter.order_index}::${chapter.title}`)
+        );
+
+        for (let i = 0; i < missing.length; i += 5) {
+          const batch = missing.slice(i, i + 5).map(chapter => ({
+            novel_id: novel.id,
+            title: chapter.title,
+            order_index: chapter.order_index,
+            content_md: chapter.content_md || "",
+            is_public: chapter.is_public !== false
+          }));
+          const insertRes = await state.client.from("chapters").insert(batch);
+          if (insertRes.error) throw insertRes.error;
+          addedChapters += batch.length;
+        }
+      }
+
+      localStorage.setItem(checkedKey, "1");
+      if (notify) {
+        if (addedBooks || addedChapters) toast(`已导入内置书籍：${addedBooks} 本，${addedChapters} 章`);
+        else toast("内置书籍已经齐全");
+      }
+      return { addedBooks, addedChapters };
+    } finally {
+      state.seedImporting = false;
+    }
+  }
+
   async function route() {
     if (!state.client) return;
     stopTTS();
@@ -370,10 +501,21 @@
   }
 
   async function renderShelf() {
+    const admin = Boolean(state.user);
+
+    if (admin) {
+      pageLoading("正在检查内置书籍…");
+      try {
+        await importSeedLibrary({ force: false, notify: true });
+      } catch (error) {
+        console.error("Seed import failed", error);
+        toast(`内置书籍导入失败：${error.message || error}`, "error");
+      }
+    }
+
     const { data, error } = await state.client.from("novels").select("*").order("updated_at", { ascending: false });
     if (error) throw error;
     state.novels = data || [];
-    const admin = Boolean(state.user);
 
     app.innerHTML = `
       <section>
@@ -383,7 +525,11 @@
             <h1>${escapeHtml(cfg.siteTitle || "纸页书架")}</h1>
             <p class="muted">${admin ? "你的作品、草稿与公开书目。" : "公开作品。"}</p>
           </div>
-          ${admin ? `<button class="primary-btn" id="newNovelBtn">＋ 新建作品</button>` : ""}
+          ${admin ? `
+            <div class="head-actions">
+              <button class="secondary-btn" id="seedImportBtn">↻ 检查内置书籍</button>
+              <button class="primary-btn" id="newNovelBtn">＋ 新建作品</button>
+            </div>` : ""}
         </div>
         ${state.novels.length ? `<div class="shelf-grid">${state.novels.map(bookCard).join("")}</div>` : `
           <div class="empty-state">
@@ -393,14 +539,23 @@
       </section>`;
 
     $("#newNovelBtn")?.addEventListener("click", () => openNovelDialog());
+    $("#seedImportBtn")?.addEventListener("click", async () => {
+      pageLoading("正在导入内置书籍…");
+      try {
+        await importSeedLibrary({ force: true, notify: true });
+      } catch (error) {
+        console.error(error);
+        toast(`导入失败：${error.message || error}`, "error");
+      }
+      await renderShelf();
+    });
     app.querySelectorAll("[data-novel-id]").forEach(el => el.addEventListener("click", () => go(`novel/${el.dataset.novelId}`)));
   }
 
   function bookCard(novel) {
-    const cover = safeHttpUrl(novel.cover_url || "");
     return `
       <article class="book-card" data-novel-id="${novel.id}" tabindex="0">
-        ${cover ? `<img class="book-cover" src="${escapeAttr(cover)}" alt="${escapeAttr(novel.title)}封面" loading="lazy">` : `<div class="book-cover placeholder">${escapeHtml((novel.title || "书").slice(0, 1))}</div>`}
+        ${coverMarkup(novel, false)}
         <div class="book-body">
           <h2>${escapeHtml(novel.title)}</h2>
           <p class="book-desc">${escapeHtml(novel.description || "暂无简介")}</p>
@@ -421,12 +576,11 @@
     state.currentNovel = novelRes.data;
     state.currentChapters = chaptersRes.data || [];
     const owner = isOwner(state.currentNovel);
-    const cover = safeHttpUrl(state.currentNovel.cover_url || "");
 
     app.innerHTML = `
       <section>
         <div class="novel-hero">
-          ${cover ? `<img class="novel-cover-large" src="${escapeAttr(cover)}" alt="${escapeAttr(state.currentNovel.title)}封面">` : `<div class="novel-cover-large placeholder">${escapeHtml((state.currentNovel.title || "书").slice(0, 1))}</div>`}
+          ${coverMarkup(state.currentNovel, true)}
           <div class="novel-summary">
             <p class="eyebrow">${escapeHtml(state.currentNovel.status || "作品")}</p>
             <h1>${escapeHtml(state.currentNovel.title)}</h1>

@@ -1,5 +1,5 @@
-const CACHE = "novel-shelf-shell-v2";
-const SHELL = ["./", "./index.html", "./styles.css", "./app.js", "./config.js", "./manifest.webmanifest", "./assets/icon.svg"];
+const CACHE = "novel-shelf-shell-v3";
+const SHELL = ["./", "./index.html", "./styles.css", "./app.js", "./config.js", "./manifest.webmanifest", "./assets/icon.svg", "./data/seed-library.json"];
 
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)));

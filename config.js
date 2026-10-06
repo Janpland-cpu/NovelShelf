@@ -4,7 +4,7 @@
  */
 window.APP_CONFIG = {
   siteTitle: "纸页书架",
-  supabaseUrl: "https://xjelhwxwqgqisneotiwo.supabase.co",
-  supabaseKey: "sb_publishable_gUhQa1XnEfXjbycRubOpYw_ASXgf02o",
+  supabaseUrl: "https://YOUR_PROJECT.supabase.co",
+  supabaseKey: "YOUR_PUBLISHABLE_KEY",
   storageBucket: "novel-images"
 };

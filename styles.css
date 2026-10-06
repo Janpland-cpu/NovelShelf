@@ -98,6 +98,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 
 .app-shell { width: min(1160px, calc(100% - 32px)); margin: 0 auto; padding: 42px 0 90px; }
 .page-head { display: flex; justify-content: space-between; gap: 18px; align-items: end; margin-bottom: 28px; }
+.head-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .page-head h1 { margin: 4px 0 0; font-family: ui-serif, serif; font-size: clamp(30px, 6vw, 52px); line-height: 1.08; }
 .eyebrow { margin: 0; color: var(--muted); text-transform: uppercase; letter-spacing: .12em; font-size: 12px; font-weight: 750; }
 .muted { color: var(--muted); }
@@ -112,8 +113,30 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   background: var(--surface); box-shadow: var(--shadow); cursor: pointer; transition: transform .18s ease, box-shadow .18s ease;
 }
 .book-card:hover { transform: translateY(-2px); }
-.book-cover { aspect-ratio: 16 / 9; background: linear-gradient(135deg, var(--surface-2), var(--border)); object-fit: cover; width: 100%; }
-.book-cover.placeholder { display: grid; place-items: center; color: var(--muted); font-family: serif; font-size: 38px; }
+.cover-wrap { position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; background: var(--surface-2); }
+.cover-wrap-large { aspect-ratio: 3 / 4; border-radius: var(--radius); border: 1px solid var(--border); }
+.book-cover, .novel-cover-large { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.cover-image { z-index: 2; }
+.default-cover {
+  z-index: 1; display: flex; flex-direction: column; justify-content: space-between; padding: 18px;
+  background:
+    radial-gradient(circle at 14% 18%, color-mix(in srgb, var(--accent) 26%, transparent), transparent 36%),
+    radial-gradient(circle at 86% 80%, color-mix(in srgb, var(--muted) 20%, transparent), transparent 40%),
+    linear-gradient(145deg, var(--surface-2), color-mix(in srgb, var(--surface) 72%, var(--border)));
+  color: var(--text); overflow: hidden;
+}
+.default-cover::after {
+  content: ""; position: absolute; inset: 12px; border: 1px solid color-mix(in srgb, var(--text) 18%, transparent);
+  border-radius: calc(var(--radius) - 6px); pointer-events: none;
+}
+.default-cover-kicker, .default-cover-site {
+  position: relative; z-index: 1; font: 700 10px/1.2 ui-sans-serif, sans-serif; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--muted);
+}
+.default-cover strong {
+  position: relative; z-index: 1; font: 750 clamp(21px, 4vw, 34px)/1.2 ui-serif, serif;
+  max-width: 92%; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
 .book-body { padding: 18px; display: flex; flex-direction: column; gap: 11px; flex: 1; }
 .book-body h2 { margin: 0; font-size: 21px; font-family: ui-serif, serif; }
 .book-desc { color: var(--muted); margin: 0; line-height: 1.65; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
@@ -122,8 +145,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .badge.private { color: var(--danger); }
 
 .novel-hero { display: grid; grid-template-columns: 210px 1fr; gap: 30px; align-items: start; margin-bottom: 34px; }
-.novel-cover-large { width: 100%; aspect-ratio: 3/4; border-radius: var(--radius); object-fit: cover; background: var(--surface-2); border: 1px solid var(--border); }
-.novel-cover-large.placeholder { display: grid; place-items: center; font: 56px/1 serif; color: var(--muted); }
+.novel-hero > .cover-wrap-large { width: 210px; }
+.novel-cover-large.default-cover { padding: 20px; border-radius: inherit; }
+.novel-cover-large.default-cover strong { font-size: clamp(24px, 3vw, 38px); }
 .novel-summary h1 { margin: 8px 0 12px; font: 700 clamp(32px, 5vw, 54px)/1.14 ui-serif, serif; }
 .novel-summary p.description { margin: 16px 0; line-height: 1.8; white-space: pre-wrap; }
 .chapter-list { display: grid; gap: 8px; }
@@ -200,7 +224,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .app-shell { width: min(100% - 22px, 1160px); padding-top: 26px; }
   .page-head { align-items: start; flex-direction: column; }
   .novel-hero { grid-template-columns: 92px 1fr; gap: 16px; }
-  .novel-cover-large { border-radius: 12px; }
+  .novel-hero > .cover-wrap-large { width: 92px; border-radius: 12px; }
+  .novel-cover-large.default-cover { padding: 10px; }
+  .novel-cover-large.default-cover strong { font-size: 17px; }
+  .novel-cover-large.default-cover .default-cover-kicker, .novel-cover-large.default-cover .default-cover-site { font-size: 8px; }
   .novel-summary h1 { font-size: 30px; margin-top: 2px; }
   .novel-summary p.description { grid-column: 1 / -1; }
   .reader-toolbar { top: 67px; }
